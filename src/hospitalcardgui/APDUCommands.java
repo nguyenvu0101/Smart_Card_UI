@@ -8,7 +8,7 @@ public class APDUCommands {
     private final CardChannel channel;
 
     // CLA phải trùng với applet
-    private static final byte CARD_CLA = (byte)0xB0;
+  public static final byte CLA_APPLET = (byte)0xB0; 
 
     // Lệnh PIN
     private static final byte INS_VERIFY_PIN     = 0x20;
@@ -25,6 +25,10 @@ public class APDUCommands {
     private static final byte INS_GET_PATIENT_ID = 0x41;
     private static final byte INS_SET_PROFILE    = 0x42;
 
+    // Lệnh RSA (MỚI THÊM)
+    public static final byte INS_SET_RSA_KEY    = 0x50;
+    public static final byte INS_SIGN_CHALLENGE = 0x51;
+
     public APDUCommands(CardChannel channel) {
         this.channel = channel;
     }
@@ -36,15 +40,15 @@ public class APDUCommands {
         CommandAPDU cmd;
         if (data != null) {
             if (le >= 0) {
-                cmd = new CommandAPDU(CARD_CLA, ins, p1, p2, data, le);
+                cmd = new CommandAPDU(CLA_APPLET, ins, p1, p2, data, le);
             } else {
-                cmd = new CommandAPDU(CARD_CLA, ins, p1, p2, data);
+                cmd = new CommandAPDU(CLA_APPLET, ins, p1, p2, data);
             }
         } else {
             if (le >= 0) {
-                cmd = new CommandAPDU(CARD_CLA, ins, p1, p2, le);
+                cmd = new CommandAPDU(CLA_APPLET, ins, p1, p2, le);
             } else {
-                cmd = new CommandAPDU(CARD_CLA, ins, p1, p2);
+                cmd = new CommandAPDU(CLA_APPLET, ins, p1, p2);
             }
         }
         return channel.transmit(cmd);
@@ -63,18 +67,17 @@ public class APDUCommands {
         }
     }
 
-  public boolean changePIN(String oldPinIgnored, String newPin) {
-    try {
-        // Applet chỉ cần PIN mới vì đã verify trước đó
-        ResponseAPDU resp = send(INS_CHANGE_PIN, (byte)0, (byte)0,
-                newPin.getBytes(), -1);
-        return resp.getSW() == 0x9000;
-    } catch (Exception e) {
-        e.printStackTrace();
-        return false;
+    public boolean changePIN(String oldPinIgnored, String newPin) {
+        try {
+            // Applet chỉ cần PIN mới vì đã verify trước đó
+            ResponseAPDU resp = send(INS_CHANGE_PIN, (byte)0, (byte)0,
+                    newPin.getBytes(), -1);
+            return resp.getSW() == 0x9000;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
-}
-
 
     // Admin đặt PIN mới trực tiếp (không cần verify)
     public boolean setAdminPin(String pinStr) {
@@ -211,6 +214,43 @@ public class APDUCommands {
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        }
+    }
+
+    /* ================== RSA SECURITY (MỚI) ================== */
+
+    /**
+     * Gửi Private Key xuống thẻ (gọi từ CardIssuePanel)
+     * data format: [LenMod][Modulus...][LenExp][Exponent...]
+     */
+    public boolean setRsaPrivateKey(byte[] keyData) {
+        try {
+            // INS_SET_RSA_KEY = 0x50
+            ResponseAPDU resp = send(INS_SET_RSA_KEY, (byte)0, (byte)0, keyData, -1);
+            return resp.getSW() == 0x9000;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * Gửi Challenge để thẻ ký xác thực
+     * Trả về chữ ký (byte array) hoặc null nếu lỗi
+     */
+    public byte[] signChallenge(byte[] challenge) {
+        try {
+            // INS_SIGN_CHALLENGE = 0x51
+            // Giả sử chữ ký RSA 1024 bit dài 128 bytes
+            ResponseAPDU resp = send(INS_SIGN_CHALLENGE, (byte)0, (byte)0, challenge, 128);
+            
+            if (resp.getSW() == 0x9000) {
+                return resp.getData();
+            }
+            return null;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
     }
 

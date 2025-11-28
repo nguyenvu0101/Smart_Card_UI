@@ -51,7 +51,7 @@ public class CardManagePanel extends JPanel {
 
 
     private void initUI() {
-        setBorder(BorderFactory.createTitledBorder("Quản lý thẻ và hồ sơ bệnh nhân"));
+        setBorder(BorderFactory.createTitledBorder("Quản Lý Bệnh Nhân"));
         setLayout(new BorderLayout(10, 10));
 
         // ===== THANH TÌM KIẾM =====
