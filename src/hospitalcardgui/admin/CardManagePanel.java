@@ -40,13 +40,15 @@ public class CardManagePanel extends JPanel {
     }
 
     // Gọi từ AdminFrame khi chuyển sang tab này để reset + load lại
-    public void resetAndLoad() {
-        table.clearSelection();
-        selectedPatientId = null;
-        txtKeyword.setText("");
-        cbField.setSelectedIndex(0);
-        search();
-    }
+   public void resetAndLoad() {
+    table.clearSelection();
+    selectedPatientId = null;
+    txtKeyword.setText("");
+    cbField.setSelectedIndex(0);
+    model.setRowCount(0);   // chỉ xóa bảng, KHÔNG search
+    clearEditFields();
+}
+
 
     private void initUI() {
         setBorder(BorderFactory.createTitledBorder("Quản lý thẻ và hồ sơ bệnh nhân"));

@@ -7,6 +7,12 @@
             <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/CardManager.java</file>
             <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/APDUCommands.java</file>
             <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/DatabaseConnection.java</file>
+            <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/PinPanel.java</file>
+            <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/TransactionPanel.java</file>
+            <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/admin/AdminFrame.java</file>
+            <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/admin/CardIssuePanel.java</file>
+            <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/admin/CardManagePanel.java</file>
+            <file>file:/F:/Ki1Nam5/SmartCard/HospitalCardGUI/src/hospitalcardgui/admin/CardWritePanel.java</file>
         </group>
     </open-files>
 </project-private>
