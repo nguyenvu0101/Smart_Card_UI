@@ -1,244 +1,245 @@
 package hospitalcardgui;
 
+import javax.smartcardio.CardChannel;
+import javax.smartcardio.CommandAPDU;
+import javax.smartcardio.ResponseAPDU;
 import javax.swing.*;
 import java.awt.*;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 public class PinPanel extends JPanel {
 
-    private final MainFrame parent;
     private JPasswordField txtPin;
     private JButton btnLogin;
-    private JButton btnChangePin; // dùng cho đổi PIN chủ động (sau này)
+    private JLabel lblStatus;
+    
+    private MainFrame mainFrame; 
+    private final CardManager cardManager = CardManager.getInstance();
 
-    public PinPanel(MainFrame parent) {
-        this.parent = parent;
+    public PinPanel(MainFrame frame) {
+        this.mainFrame = frame;
         initUI();
     }
 
     private void initUI() {
-        setBorder(BorderFactory.createTitledBorder("Nhập / đổi mã PIN"));
         setLayout(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(5, 5, 5, 5);
-        c.fill = GridBagConstraints.HORIZONTAL;
-
+        c.insets = new Insets(10, 10, 10, 10);
         c.gridx = 0; c.gridy = 0;
-        add(new JLabel("PIN:"), c);
 
-        c.gridx = 1;
+        JLabel title = new JLabel("ĐĂNG NHẬP THẺ BỆNH NHÂN");
+        title.setFont(new Font("Arial", Font.BOLD, 16));
+        add(title, c);
+        
+        c.gridy = 1;
+        add(new JLabel("Nhập PIN (6 số):"), c);
+        
+        c.gridy = 2;
         txtPin = new JPasswordField(10);
-        txtPin.setEnabled(false);
+        txtPin.setHorizontalAlignment(JTextField.CENTER);
         add(txtPin, c);
-
-        c.gridx = 0; c.gridy = 1;
-        btnLogin = new JButton("Đăng nhập");
-        btnLogin.setEnabled(false);
+        
+        c.gridy = 3;
+        btnLogin = new JButton("Xác nhận PIN");
         btnLogin.addActionListener(e -> onLogin());
         add(btnLogin, c);
 
-        c.gridx = 1;
-        btnChangePin = new JButton("Đổi PIN");
-        btnChangePin.setEnabled(false);
-        btnChangePin.addActionListener(e -> onChangePinManual());
-        add(btnChangePin, c);
+        c.gridy = 4;
+        lblStatus = new JLabel("Vui lòng kết nối thẻ...");
+        lblStatus.setForeground(Color.GRAY);
+        add(lblStatus, c);
     }
-
+    
     public void enablePinInput(boolean enable) {
         txtPin.setEnabled(enable);
         btnLogin.setEnabled(enable);
-        if (!enable) {
-            btnChangePin.setEnabled(false);
+        if (enable) {
+            lblStatus.setText("Thẻ đã sẵn sàng. Mời nhập PIN.");
+            lblStatus.setForeground(Color.BLUE);
+            txtPin.requestFocus();
+        } else {
+            lblStatus.setText("Chưa kết nối thẻ.");
+            lblStatus.setForeground(Color.RED);
             txtPin.setText("");
         }
     }
 
     private void onLogin() {
-        APDUCommands apdu = parent.getApdu();
-        if (apdu == null) {
-            JOptionPane.showMessageDialog(this, "Chưa kết nối thẻ.");
+        String pin = new String(txtPin.getPassword());
+        if (pin.length() != 6) {
+            lblStatus.setText("PIN phải có đúng 6 chữ số.");
+            lblStatus.setForeground(Color.RED);
             return;
         }
 
-        String pin = new String(txtPin.getPassword()).trim();
-        if (pin.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Nhập PIN trước.");
-            return;
-        }
-
-        // 1. VERIFY PIN trên thẻ
-        if (!apdu.verifyPIN(pin)) {
-            parent.log("PIN sai.");
-            JOptionPane.showMessageDialog(this, "PIN sai.", "Lỗi",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        parent.setStatus("PIN đúng, đang kiểm tra thông tin thẻ...", new Color(0,120,0));
-        parent.log("PIN đúng.");
-
-        // 2. Đọc patient_id từ thẻ
-        String patientId = apdu.getPatientId();
-        if (patientId == null || patientId.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Không đọc được mã bệnh nhân từ thẻ.",
-                    "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        parent.setCurrentPatientId(patientId);
-
-        // 3. Kiểm tra cờ must_change_pin trong DB
-        boolean mustChange = mustChangePin(patientId);
-        if (mustChange) {
-            // Bắt bệnh nhân đổi PIN lần đầu
-            boolean ok = forceChangePinFirstTime(pin, apdu, patientId);
-            if (!ok) {
-                // Nếu đổi PIN thất bại thì không cho đăng nhập tiếp
-                return;
-            }
-        }
-
-        // 4. Load thông tin bệnh nhân & sang màn giao dịch
-        parent.loadPatientInfoOnTransactionPanel();
-        btnChangePin.setEnabled(true); // cho phép đổi PIN chủ động sau này
-        parent.showTransactionPage();
-    }
-
-    // Đổi PIN chủ động (không phải lần đầu bắt buộc) – có thể để trống hoặc đơn giản
-    private void onChangePinManual() {
-        APDUCommands apdu = parent.getApdu();
-        if (apdu == null) {
-            JOptionPane.showMessageDialog(this, "Chưa kết nối / xác thực thẻ.");
-            return;
-        }
-
-        String oldPin = new String(txtPin.getPassword()).trim();
-        if (oldPin.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Nhập PIN hiện tại trước.");
-            return;
-        }
-
-        JPanel panel = new JPanel(new GridLayout(2,2,5,5));
-        JPasswordField txtNew1 = new JPasswordField();
-        JPasswordField txtNew2 = new JPasswordField();
-        panel.add(new JLabel("PIN mới:"));
-        panel.add(txtNew1);
-        panel.add(new JLabel("Nhập lại PIN mới:"));
-        panel.add(txtNew2);
-
-        int res = JOptionPane.showConfirmDialog(this, panel,
-                "Đổi PIN", JOptionPane.OK_CANCEL_OPTION);
-        if (res != JOptionPane.OK_OPTION) return;
-
-        String new1 = new String(txtNew1.getPassword()).trim();
-        String new2 = new String(txtNew2.getPassword()).trim();
-        if (!isValidPin(new1) || !new1.equals(new2)) {
-            JOptionPane.showMessageDialog(this,
-                    "PIN mới phải gồm 6 chữ số và nhập trùng khớp.",
-                    "PIN không hợp lệ", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        if (apdu.changePIN(oldPin, new1)) {
-            JOptionPane.showMessageDialog(this, "Đổi PIN thành công.");
-            txtPin.setText(new1); // cập nhật ô PIN trên form
-        } else {
-            JOptionPane.showMessageDialog(this,
-                    "Đổi PIN thất bại (PIN hiện tại có thể không đúng).",
-                    "Lỗi", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    /* ========== HỖ TRỢ: kiểm tra & bắt đổi PIN lần đầu ========== */
-
-    // Đọc must_change_pin từ bảng smartcards
-    private boolean mustChangePin(String patientId) {
-        String sql = "SELECT must_change_pin FROM smartcards WHERE patient_id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement pst = conn.prepareStatement(sql)) {
-
-            pst.setString(1, patientId);
-            try (ResultSet rs = pst.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getBoolean("must_change_pin");
+        try {
+            // ✅ 1. Kiểm tra kết nối & Tự động kết nối lại
+            if (!cardManager.isConnected()) {
+                if (!cardManager.connect()) {
+                    lblStatus.setText("Mất kết nối thẻ!");
+                    lblStatus.setForeground(Color.RED);
+                    return;
                 }
             }
+
+            // Tạo APDU mới để đảm bảo channel tươi
+            CardChannel ch = cardManager.getChannel();
+            APDUCommands apdu = new APDUCommands(ch);
+
+            // ✅ 2. SELECT APPLET
+            lblStatus.setText("Đang chọn applet...");
+            byte[] aid = {(byte)0x00, (byte)0x11, (byte)0x22, (byte)0x33, (byte)0x44, (byte)0x55, (byte)0x67, (byte)0x11};
+            ResponseAPDU rSel = ch.transmit(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, aid));
+            
+            if (rSel.getSW() != 0x9000) {
+                // Thử connect lại lần cuối
+                cardManager.disconnect();
+                if (cardManager.connect()) {
+                    ch = cardManager.getChannel();
+                    apdu = new APDUCommands(ch);
+                    rSel = ch.transmit(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, aid));
+                }
+                if (rSel.getSW() != 0x9000) {
+                    lblStatus.setText("Lỗi thẻ (Select failed).");
+                    lblStatus.setForeground(Color.RED);
+                    return;
+                }
+            }
+
+            // ✅ 3. LẤY SALT
+            lblStatus.setText("Đang lấy Salt...");
+            byte[] salt = apdu.getSalt();
+            if (salt == null) {
+                lblStatus.setText("Lỗi đọc Salt (SW!=9000)");
+                lblStatus.setForeground(Color.RED);
+                return;
+            }
+
+            // ✅ 4. HASH & VERIFY
+            lblStatus.setText("Đang xác thực...");
+            byte[] pinHash = CryptoUtils.deriveKeyArgon2(pin.toCharArray(), salt, 32);
+            boolean verified = apdu.verifyPinHash(pinHash);
+            
+            if (verified) {
+                // --- ĐĂNG NHẬP THÀNH CÔNG ---
+                lblStatus.setText("Đăng nhập thành công...");
+                lblStatus.setForeground(Color.GREEN);
+
+                // ✅ 5. GIẢI MÃ MASTER KEY
+                byte[] wrappedKey = apdu.getWrappedKey();
+                if (wrappedKey == null) {
+                    lblStatus.setText("Lỗi đọc Wrapped Key"); return;
+                }
+
+                byte[] keyUser = CryptoUtils.deriveKeyArgon2(pin.toCharArray(), salt, 16);
+                byte[] masterKey = CryptoUtils.aesDecrypt(wrappedKey, keyUser);
+                
+                if (masterKey == null) {
+                    lblStatus.setText("Lỗi giải mã Master Key!"); return;
+                }
+
+                // ============================================================
+                // ✅ LOGIC MỚI: KIỂM TRA TRẠNG THÁI ĐĂNG NHẬP LẦN ĐẦU
+                // ============================================================
+                int status = apdu.getCardStatus();
+                if (status == 1) {
+                    // ==> LẦN ĐẦU TIÊN: BẮT BUỘC ĐỔI PIN
+                    JOptionPane.showMessageDialog(this, 
+                        "Chào mừng bạn!\nĐây là lần sử dụng thẻ đầu tiên.\nBạn CẦN ĐỔI MÃ PIN MỚI để kích hoạt thẻ.",
+                        "Kích hoạt thẻ", JOptionPane.INFORMATION_MESSAGE);
+                    
+                    // Gọi hàm đổi PIN ngay lập tức
+                    performChangePin(apdu, masterKey);
+                    
+                    // Xóa dữ liệu nhạy cảm và return để user đăng nhập lại
+                    Arrays.fill(masterKey, (byte)0);
+                    return; 
+                }
+                // ============================================================
+
+                // ✅ 6. NẾU KHÔNG PHẢI LẦN ĐẦU -> VÀO MÀN HÌNH CHÍNH
+                byte[] encProfile = apdu.getEncryptedProfile();
+                if (encProfile == null) {
+                    lblStatus.setText("Lỗi đọc Profile"); return;
+                }
+
+                byte[] profileBytes = CryptoUtils.aesDecrypt(encProfile, masterKey);
+                String rawData = new String(profileBytes, StandardCharsets.UTF_8);
+                
+                Arrays.fill(masterKey, (byte)0);
+
+                if (mainFrame != null) {
+                    String[] parts = rawData.split("\\|");
+                    String name = (parts.length > 0) ? parts[0] : "Unknown";
+                    
+                    JOptionPane.showMessageDialog(this, "Xin chào: " + name, "Đăng nhập thành công", JOptionPane.INFORMATION_MESSAGE);
+                    mainFrame.showTransactionPage();
+                    mainFrame.getTransactionPanel().setPatientData(rawData);
+                }
+
+            } else {
+                // ✅ PIN SAI
+                int tries = apdu.getPinTriesRemaining(pinHash);
+                lblStatus.setText("Sai PIN! Còn " + tries + " lần thử.");
+                lblStatus.setForeground(Color.RED);
+            }
+
         } catch (Exception ex) {
             ex.printStackTrace();
-            parent.log("Lỗi đọc must_change_pin: " + ex.getMessage());
-        }
-        // Nếu không đọc được thì coi như không bắt đổi để tránh chặn user
-        return false;
-    }
-
-    // Bắt buộc đổi PIN lần đầu: oldPin là PIN admin đã cấp
-    private boolean forceChangePinFirstTime(String oldPin,
-                                            APDUCommands apdu,
-                                            String patientId) {
-        JPanel panel = new JPanel(new GridLayout(2,2,5,5));
-        JPasswordField txtNew1 = new JPasswordField();
-        JPasswordField txtNew2 = new JPasswordField();
-        panel.add(new JLabel("PIN mới (6 số):"));
-        panel.add(txtNew1);
-        panel.add(new JLabel("Nhập lại PIN mới:"));
-        panel.add(txtNew2);
-
-        int res = JOptionPane.showConfirmDialog(this, panel,
-                "Lần đầu sử dụng - yêu cầu đổi PIN", JOptionPane.OK_CANCEL_OPTION);
-        if (res != JOptionPane.OK_OPTION) {
-            JOptionPane.showMessageDialog(this,
-                    "Bạn phải đổi PIN để tiếp tục sử dụng thẻ.",
-                    "Chưa đổi PIN", JOptionPane.WARNING_MESSAGE);
-            return false;
-        }
-
-        String new1 = new String(txtNew1.getPassword()).trim();
-        String new2 = new String(txtNew2.getPassword()).trim();
-        if (!isValidPin(new1) || !new1.equals(new2)) {
-            JOptionPane.showMessageDialog(this,
-                    "PIN mới phải gồm 6 chữ số và nhập trùng khớp.",
-                    "PIN không hợp lệ", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-
-        // Gọi CHANGE_PIN trên thẻ
-        if (!apdu.changePIN(oldPin, new1)) {
-            JOptionPane.showMessageDialog(this,
-                    "Đổi PIN thất bại. Hãy thử lại hoặc liên hệ quầy hỗ trợ.",
-                    "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-
-        // Đổi PIN thành công -> update cờ must_change_pin = false trong DB
-        updateMustChangePinFalse(patientId);
-
-        JOptionPane.showMessageDialog(this,
-                "Đổi PIN thành công. Từ lần sau hãy dùng PIN mới để đăng nhập.");
-        txtPin.setText(new1);
-        return true;
-    }
-
-    private void updateMustChangePinFalse(String patientId) {
-        String sql = "UPDATE smartcards SET must_change_pin = FALSE WHERE patient_id = ?";
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement pst = conn.prepareStatement(sql)) {
-
-            pst.setString(1, patientId);
-            pst.executeUpdate();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            parent.log("Lỗi cập nhật must_change_pin: " + ex.getMessage());
+            lblStatus.setText("Lỗi: " + ex.getMessage());
+            lblStatus.setForeground(Color.RED);
         }
     }
 
-    // Validate PIN 6 số
-    private boolean isValidPin(String pin) {
-        if (pin == null || pin.length() != 6) return false;
-        for (int i = 0; i < pin.length(); i++) {
-            if (!Character.isDigit(pin.charAt(i))) return false;
+    // === HÀM ĐỔI PIN (Logic: Unwrap -> Rewrap -> Save) ===
+    private void performChangePin(APDUCommands apdu, byte[] masterKey) {
+        String newPin = JOptionPane.showInputDialog(this, "Nhập PIN MỚI (6 số):");
+        
+        if (newPin == null || newPin.length() != 6) {
+            JOptionPane.showMessageDialog(this, "Mật khẩu không hợp lệ (Phải đủ 6 số)!");
+            return;
         }
-        return true;
+
+        try {
+            // 1. Sinh Salt mới
+            byte[] newSalt = CryptoUtils.generateSalt();
+            
+            // 2. Hash PIN mới (để thẻ lưu verify)
+            byte[] newPinHash = CryptoUtils.deriveKeyArgon2(newPin.toCharArray(), newSalt, 32);
+            
+            // 3. Tính Key User Mới (từ PIN mới)
+            byte[] newKeyUser = CryptoUtils.deriveKeyArgon2(newPin.toCharArray(), newSalt, 16);
+            
+            // 4. BỌC LẠI MASTER KEY (Re-wrap)
+            byte[] newWrappedKey = CryptoUtils.aesEncrypt(masterKey, newKeyUser);
+
+            // 5. Ghi đè xuống thẻ
+            boolean ok1 = apdu.setSalt(newSalt);
+            boolean ok2 = apdu.setPinHash(newPinHash);
+            boolean ok3 = apdu.setWrappedKeyUser(newWrappedKey);
+            
+            // 6. Tắt cờ "Lần đầu"
+            boolean ok4 = apdu.disableFirstLogin();
+
+            if (ok1 && ok2 && ok3 && ok4) {
+                JOptionPane.showMessageDialog(this, "Đổi mật khẩu THÀNH CÔNG!\nVui lòng đăng nhập lại bằng mật khẩu mới.");
+                txtPin.setText(""); 
+                lblStatus.setText("Đã đổi PIN. Mời đăng nhập lại.");
+            } else {
+                JOptionPane.showMessageDialog(this, "Lỗi khi ghi dữ liệu xuống thẻ!");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Lỗi đổi PIN: " + e.getMessage());
+        }
+    }
+
+    private String bytesToHex(byte[] bytes) {
+        if (bytes == null) return "null";
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) sb.append(String.format("%02X", b));
+        return sb.toString();
     }
 }

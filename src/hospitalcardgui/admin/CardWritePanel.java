@@ -1,7 +1,8 @@
 package hospitalcardgui.admin;
 
-import hospitalcardgui.APDUCommands;
+import hospitalcardgui.admin.AdminKeyManager;
 import hospitalcardgui.CardManager;
+import hospitalcardgui.CryptoUtils;
 import hospitalcardgui.DatabaseConnection;
 
 import javax.smartcardio.CardChannel;
@@ -10,273 +11,285 @@ import javax.smartcardio.ResponseAPDU;
 import javax.swing.*;
 import java.awt.*;
 import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.RSAPublicKeySpec;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Arrays;
 import java.util.Base64;
 
 public class CardWritePanel extends JPanel {
 
     private JTextField txtPatientId;
-    private JPasswordField txtPin; // PIN 6 số
+    private JPasswordField txtPin;
+    private JPasswordField txtAdminPass;
     private JButton btnWrite;
     private JLabel lblStatus;
     private JTextArea txtInfoPreview;
-
     private final CardManager cardManager = CardManager.getInstance();
 
-    private APDUCommands apdu;
+    private static final int CARD_CLA = 0x80;
 
-    public CardWritePanel() {
-        initUI();
-    }
+    public CardWritePanel() { initUI(); }
 
     private void initUI() {
-        setBorder(BorderFactory.createTitledBorder("Ghi mã bệnh nhân, PIN & hồ sơ tóm tắt lên thẻ"));
+        setBorder(BorderFactory.createTitledBorder("Phát hành thẻ (Chuẩn hóa dữ liệu)"));
         setLayout(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(5,5,5,5);
         c.fill = GridBagConstraints.HORIZONTAL;
 
         int row = 0;
-
-        c.gridx = 0; c.gridy = row;
-        add(new JLabel("Mã bệnh nhân (patient_id):"), c);
-        c.gridx = 1;
-        txtPatientId = new JTextField(15);
-        add(txtPatientId, c);
+        c.gridx = 0; c.gridy = row; add(new JLabel("Mã bệnh nhân:"), c);
+        c.gridx = 1; txtPatientId = new JTextField(15); add(txtPatientId, c);
         row++;
 
-        c.gridx = 0; c.gridy = row;
-        add(new JLabel("PIN cấp cho thẻ (6 số):"), c);
-        c.gridx = 1;
-        txtPin = new JPasswordField(15);
-        add(txtPin, c);
+        c.gridx = 0; c.gridy = row; add(new JLabel("PIN User (6 số):"), c);
+        c.gridx = 1; txtPin = new JPasswordField(15); add(txtPin, c);
+        row++;
+
+        c.gridx = 0; c.gridy = row; add(new JLabel("Admin Password:"), c);
+        c.gridx = 1; txtAdminPass = new JPasswordField(15); add(txtAdminPass, c);
         row++;
 
         c.gridx = 0; c.gridy = row; c.gridwidth = 2;
-        btnWrite = new JButton("Kết nối & Ghi thẻ");
+        btnWrite = new JButton("Ghi Thẻ & Mã Hóa DB");
         btnWrite.addActionListener(e -> onWrite());
         add(btnWrite, c);
         row++;
 
         c.gridx = 0; c.gridy = row; c.gridwidth = 2;
-        lblStatus = new JLabel("Chưa kết nối thẻ.");
+        lblStatus = new JLabel("Chưa kết nối");
         lblStatus.setForeground(Color.RED);
         add(lblStatus, c);
         row++;
 
         c.gridx = 0; c.gridy = row; c.gridwidth = 2;
-        txtInfoPreview = new JTextArea(8, 40);
+        txtInfoPreview = new JTextArea(10, 40);
         txtInfoPreview.setEditable(false);
-        txtInfoPreview.setBorder(BorderFactory.createTitledBorder("Thông tin sẽ ghi lên thẻ (từ DB)"));
         add(new JScrollPane(txtInfoPreview), c);
     }
 
     private void onWrite() {
         String pid = txtPatientId.getText().trim();
-        String pin = new String(txtPin.getPassword()).trim();
+        char[] pinChars = txtPin.getPassword();
+        char[] adminChars = txtAdminPass.getPassword();
 
-        if (pid.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Nhập patient_id trước khi ghi thẻ.");
+        if (pid.isEmpty() || pinChars.length == 0 || adminChars.length == 0) {
+            JOptionPane.showMessageDialog(this, "Nhập thiếu thông tin!");
             return;
         }
-        if (!isValidPin(pin)) {
-            JOptionPane.showMessageDialog(this, "PIN phải gồm đúng 6 chữ số.", "PIN không hợp lệ", JOptionPane.ERROR_MESSAGE);
+
+        if (!DatabaseConnection.verifyAdmin("admin", new String(adminChars))) {
+            JOptionPane.showMessageDialog(this, "Sai mật khẩu Admin!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         PatientProfile profile = loadPatientFromDb(pid);
         if (profile == null) {
-            JOptionPane.showMessageDialog(this, "Không tìm thấy bệnh nhân với patient_id = " + pid, "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Không tìm thấy BN ID=" + pid);
             return;
         }
 
-        txtInfoPreview.setText(
-                "Họ tên: " + profile.fullName + "\n" +
-                "Ngày sinh: " + profile.dob + "\n" +
-                "Nhóm máu: " + profile.bloodType + "\n" +
-                "Dị ứng: " + profile.allergies + "\n" +
-                "Bệnh mãn tính: " + profile.chronic + "\n" +
-                "Mã BHYT: " + profile.healthId + "\n" +
-                "PIN cấp: " + pin + "\n" +
-                "[ RSA Key (512-bit) sẽ được sinh tự động ]"
-        );
+        byte[] masterKey = null;
+        byte[] salt = null;
+        byte[] keyUser = null;
+        byte[] keyAdmin = null;
+        byte[] pinHash = null;
+        byte[] wrappedMkUser = null;
+        byte[] wrappedMkAdmin = null;
+        byte[] encryptedProfile = null;
 
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Ghi thông tin bệnh nhân và PIN này lên thẻ?\npatient_id = " + pid,
-                "Xác nhận", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        // 2. Kết nối thẻ
         try {
-            cardManager.disconnect(); 
-            if (!cardManager.connect()) {
-                JOptionPane.showMessageDialog(this, "Không tìm thấy thẻ (kiểm tra JCIDE / reader).", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            
-            CardChannel ch = cardManager.getChannel();
+            txtInfoPreview.setText("Đang xử lý Crypto...\n");
 
-            // === FIX CHUẨN: SELECT APPLET VỚI AID TRONG ẢNH ===
-            // AID: 00 11 22 33 44 55 67 11 (Lấy từ ảnh bạn gửi)
-            byte[] aid = {
-                (byte)0x00, (byte)0x11, (byte)0x22, (byte)0x33, 
-                (byte)0x44, (byte)0x55, (byte)0x67, (byte)0x11
-            };
+            // 1. CHUẨN BỊ DỮ LIỆU RAW (PLAINTEXT)
+            String plainRawData;
             
-            ResponseAPDU selectResp = ch.transmit(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, aid));
+            if (profile.isEncrypted) {
+                // Nếu DB đã mã hóa -> Giải mã để lấy lại Plaintext gốc
+                if (!AdminKeyManager.isKeyReady()) throw new Exception("Thiếu Admin Key!");
+                byte[] encBytes = Base64.getDecoder().decode(profile.rawData);
+                byte[] decBytes = CryptoUtils.aesDecrypt(encBytes, AdminKeyManager.getKey());
+                plainRawData = new String(decBytes, StandardCharsets.UTF_8);
+            } else {
+                // NẾU DB CHƯA MÃ HÓA -> ĐÓNG GÓI THEO THỨ TỰ CHUẨN (0->6)
+                plainRawData = profile.fullName + "|" +       // 0
+                               profile.dob + "|" +            // 1
+                               profile.bloodType + "|" +      // 2
+                               profile.allergies + "|" +      // 3
+                               profile.chronic + "|" +        // 4
+                               profile.healthId + "|" +       // 5
+                               profile.address;               // 6
+            }
+
+            // 2. SINH KHÓA THẺ
+            masterKey = CryptoUtils.generateMasterKey();
+            salt = CryptoUtils.generateSalt();
+            keyUser = CryptoUtils.deriveKeyArgon2(pinChars, salt, 16);
+            keyAdmin = CryptoUtils.deriveKeyArgon2(adminChars, salt, 16);
+            pinHash = CryptoUtils.deriveKeyArgon2(pinChars, salt, 32);
+            wrappedMkUser = CryptoUtils.aesEncrypt(masterKey, keyUser);
+            wrappedMkAdmin = CryptoUtils.aesEncrypt(masterKey, keyAdmin);
+
+            // 3. MÃ HÓA CHO THẺ
+            encryptedProfile = CryptoUtils.aesEncrypt(plainRawData.getBytes(StandardCharsets.UTF_8), masterKey);
             
-            if (selectResp.getSW() != 0x9000) {
-                // Thử nốt trường hợp AID mới (nếu bạn đã đổi)
-                byte[] aidNew = {
-                    (byte)0x00, (byte)0x11, (byte)0x22, (byte)0x33, 
-                    (byte)0x44, (byte)0x55, (byte)0x67, (byte)0x00
-                };
-                selectResp = ch.transmit(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, aidNew));
+            // 4. MÃ HÓA CHO DB (Nếu chưa mã hóa)
+            if (!profile.isEncrypted) {
+                if (!AdminKeyManager.isKeyReady()) throw new Exception("Thiếu Admin Key!");
+                byte[] dbEncBytes = CryptoUtils.aesEncrypt(plainRawData.getBytes(StandardCharsets.UTF_8), AdminKeyManager.getKey());
+                String dbEncBase64 = Base64.getEncoder().encodeToString(dbEncBytes);
                 
-                if (selectResp.getSW() != 0x9000) {
-                     JOptionPane.showMessageDialog(this, 
-                        "Lỗi Select Applet (SW=" + Integer.toHexString(selectResp.getSW()) + ").\nĐã thử cả 2 AID (11 và 00) đều không được.\nVui lòng kiểm tra lại AID trong JCIDE.", 
-                        "Lỗi Thẻ", JOptionPane.ERROR_MESSAGE);
-                    return;
+                if (updateEncryptedDataToDb(pid, dbEncBase64)) {
+                    txtInfoPreview.append("- Đã mã hóa dữ liệu và cập nhật DB.\n");
                 }
             }
-            // ==================================================
 
-            apdu = new APDUCommands(ch);
+            Arrays.fill(masterKey, (byte)0);
 
-            // 3. Sinh khóa RSA (512 bit)
-            System.out.println("Đang sinh khóa RSA 512 bit...");
-            KeyPair keyPair = generateRSAKeyPair();
-            RSAPublicKey pubKey = (RSAPublicKey) keyPair.getPublic();
-            RSAPrivateKey privKey = (RSAPrivateKey) keyPair.getPrivate();
-            
-            // 4. Update DB
-            boolean updateDbOk = updatePublicKeyToDb(pid, pubKey);
-            if (!updateDbOk) {
-                JOptionPane.showMessageDialog(this, "Lỗi cập nhật Public Key vào DB.", "Lỗi DB", JOptionPane.ERROR_MESSAGE);
+            // 5. GHI THẺ
+            lblStatus.setText("Đang kết nối thẻ...");
+            if (!cardManager.connect()) {
+                JOptionPane.showMessageDialog(this, "Lỗi kết nối thẻ");
                 return;
+            }
+            CardChannel ch = cardManager.getChannel();
+            
+            byte[] aid = {(byte)0x00, (byte)0x11, (byte)0x22, (byte)0x33, (byte)0x44, (byte)0x55, (byte)0x67, (byte)0x11};
+            ResponseAPDU rSel = ch.transmit(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, aid));
+            if (rSel.getSW() != 0x9000) throw new Exception("Lỗi Select AID: " + formatSW(rSel.getSW()));
+
+            txtInfoPreview.append("- Gửi dữ liệu xuống thẻ...\n");
+            sendDataAPDU(ch, CARD_CLA, 0x20, 0x00, 0x00, salt, "Salt");
+            sendDataAPDU(ch, CARD_CLA, 0x21, 0x00, 0x00, pinHash, "PinHash");
+            sendDataAPDU(ch, CARD_CLA, 0x22, 0x00, 0x00, wrappedMkUser, "WrapUser");
+            sendDataAPDU(ch, CARD_CLA, 0x23, 0x00, 0x00, wrappedMkAdmin, "WrapAdmin");
+            sendDataAPDU(ch, CARD_CLA, 0x24, 0x00, 0x00, encryptedProfile, "Profile");
+
+            // RSA KeyGen
+            txtInfoPreview.append("--- Yêu cầu thẻ sinh khóa RSA ---\n");
+            CommandAPDU cmdGen = new CommandAPDU(CARD_CLA, 0x52, 0x00, 0x00, 256); 
+            ResponseAPDU respGen = ch.transmit(cmdGen);
+            if (respGen.getSW() != 0x9000) throw new Exception("Lỗi sinh RSA: " + formatSW(respGen.getSW()));
+            
+            byte[] keyData = respGen.getData();
+            if (keyData.length > 4) {
+                int modLen = ((keyData[0] & 0xFF) << 8) | (keyData[1] & 0xFF);
+                byte[] modulus = new byte[modLen];
+                System.arraycopy(keyData, 2, modulus, 0, modLen);
+                int expOffset = 2 + modLen;
+                int expLen = ((keyData[expOffset] & 0xFF) << 8) | (keyData[expOffset+1] & 0xFF);
+                byte[] exponent = new byte[expLen];
+                System.arraycopy(keyData, expOffset + 2, exponent, 0, expLen);
+                
+                KeyFactory kf = KeyFactory.getInstance("RSA");
+                RSAPublicKeySpec pubSpec = new RSAPublicKeySpec(new BigInteger(1, modulus), new BigInteger(1, exponent));
+                RSAPublicKey pubKey = (RSAPublicKey) kf.generatePublic(pubSpec);
+                updatePublicKeyToDb(pid, pubKey);
             }
 
-            // 5. Ghi dữ liệu xuống thẻ
-            if (!apdu.setPatientId(pid)) {
-                JOptionPane.showMessageDialog(this, "Lỗi APDU: Không ghi được Patient ID.", "Ghi thẻ thất bại", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            
-            if (!apdu.setProfile(profile.fullName, profile.dob, profile.bloodType, profile.allergies, profile.chronic, profile.healthId)) {
-                JOptionPane.showMessageDialog(this, "Lỗi APDU: Không ghi được Profile.", "Ghi thẻ thất bại", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            
-            if (!apdu.setAdminPin(pin)) {
-                JOptionPane.showMessageDialog(this, "Lỗi APDU: Không set được PIN.", "Ghi thẻ thất bại", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            
-            // 6. Ghi RSA Key
-            byte[] privKeyData = packPrivateKey(privKey);
-            if (!apdu.setRsaPrivateKey(privKeyData)) {
-                JOptionPane.showMessageDialog(this, "Lỗi APDU: Không ghi được RSA Private Key.", "Ghi thẻ thất bại", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            lblStatus.setText("Đã ghi xong thẻ cho BN: " + pid);
-            lblStatus.setForeground(new Color(0,120,0));
-            JOptionPane.showMessageDialog(this, "Ghi thẻ thành công!\n- Hồ sơ đã ghi.\n- PIN đã đặt.\n- RSA Key đã nạp.");
+            updateCardStatusActive(pid);
+            lblStatus.setText("Hoàn tất!");
+            lblStatus.setForeground(Color.GREEN);
+            JOptionPane.showMessageDialog(this, "Phát hành thẻ thành công!");
 
         } catch (Exception ex) {
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Lỗi ngoại lệ: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            txtInfoPreview.append("LỖI: " + ex.getMessage() + "\n");
+            lblStatus.setText("Lỗi!");
         } finally {
-            cardManager.disconnect();
-            apdu = null;
+            zeroCharArray(pinChars); zeroCharArray(adminChars);
+            zeroByteArray(masterKey); zeroByteArray(salt);
         }
     }
 
-    private boolean isValidPin(String pin) {
-        if (pin == null || pin.length() != 6) return false;
-        for (int i = 0; i < pin.length(); i++) if (!Character.isDigit(pin.charAt(i))) return false;
-        return true;
-    }
-    
-    private KeyPair generateRSAKeyPair() throws Exception {
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-        keyGen.initialize(512); 
-        return keyGen.generateKeyPair();
-    }
-    
-    private boolean updatePublicKeyToDb(String pid, RSAPublicKey pubKey) {
-        String sql = "UPDATE smartcards SET card_public_key = ? WHERE patient_id = ?";
+    // --- HELPER METHODS ---
+    private boolean updateEncryptedDataToDb(String pid, String encryptedData) {
+        // Cập nhật encrypted_data VÀ xóa sạch các cột plaintext
+        String sql = "UPDATE patients SET encrypted_data = ?, full_name = ?, " +
+                     "date_of_birth = NULL, home_address = 'ENC', blood_type = 'ENC', " +
+                     "allergies = 'ENC', chronic_illness = 'ENC', health_insurance_id = 'ENC' " +
+                     "WHERE patient_id = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement pst = conn.prepareStatement(sql)) {
-            String pubBase64 = Base64.getEncoder().encodeToString(pubKey.getEncoded());
-            pst.setString(1, pubBase64);
-            pst.setString(2, pid);
-            return pst.executeUpdate() > 0; 
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-    
-    private byte[] packPrivateKey(RSAPrivateKey privKey) {
-        BigInteger mod = privKey.getModulus();
-        BigInteger exp = privKey.getPrivateExponent();
-        byte[] modBytes = stripLeadingZero(mod.toByteArray());
-        byte[] expBytes = stripLeadingZero(exp.toByteArray());
-        int len = 1 + modBytes.length + 1 + expBytes.length;
-        byte[] data = new byte[len];
-        int off = 0;
-        data[off++] = (byte) modBytes.length;
-        System.arraycopy(modBytes, 0, data, off, modBytes.length);
-        off += modBytes.length;
-        data[off++] = (byte) expBytes.length;
-        System.arraycopy(expBytes, 0, data, off, expBytes.length);
-        return data;
-    }
-    
-    private byte[] stripLeadingZero(byte[] bytes) {
-        if (bytes.length > 0 && bytes[0] == 0) {
-            byte[] tmp = new byte[bytes.length - 1];
-            System.arraycopy(bytes, 1, tmp, 0, tmp.length);
-            return tmp;
-        }
-        return bytes;
+            pst.setString(1, encryptedData);
+            pst.setString(2, encryptedData); // Fallback
+            pst.setString(3, pid);
+            return pst.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
     }
 
     private PatientProfile loadPatientFromDb(String patientId) {
-        String sql = "SELECT full_name, date_of_birth, home_address, blood_type, allergies, chronic_illness, health_insurance_id FROM patients WHERE patient_id = ?";
-        try (Connection conn = DatabaseConnection.getConnection(); PreparedStatement pst = conn.prepareStatement(sql)) {
+        String sql = "SELECT * FROM patients WHERE patient_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection(); 
+             PreparedStatement pst = conn.prepareStatement(sql)) {
             pst.setString(1, patientId);
             try (ResultSet rs = pst.executeQuery()) {
                 if (rs.next()) {
-                    PatientProfile p = new PatientProfile();
-                    p.fullName = rs.getString("full_name");
-                    java.sql.Date dob = rs.getDate("date_of_birth");
-                    p.dob = (dob != null) ? dob.toString() : "";
-                    p.address = rs.getString("home_address");
-                    p.bloodType = rs.getString("blood_type");
-                    p.allergies = rs.getString("allergies");
-                    p.chronic = rs.getString("chronic_illness");
-                    p.healthId = rs.getString("health_insurance_id");
-                    return p;
+                    String encData = rs.getString("encrypted_data");
+                    if (encData != null && !encData.isEmpty()) {
+                        return new PatientProfile(true, encData);
+                    }
+                    // Load Plaintext theo đúng tên cột
+                    return new PatientProfile(
+                        false,
+                        rs.getString("full_name"),
+                        rs.getString("date_of_birth"),
+                        rs.getString("blood_type"),
+                        rs.getString("allergies"),
+                        rs.getString("chronic_illness"),
+                        rs.getString("health_insurance_id"),
+                        rs.getString("home_address")
+                    );
                 }
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        } catch (Exception ex) { ex.printStackTrace(); }
         return null;
     }
 
     private static class PatientProfile {
-        String fullName, dob, address, bloodType, allergies, chronic, healthId;
+        boolean isEncrypted;
+        String rawData;
+        String fullName, dob, bloodType, allergies, chronic, healthId, address;
+
+        public PatientProfile(boolean isEnc, String data) {
+            this.isEncrypted = isEnc; this.rawData = data;
+        }
+        public PatientProfile(boolean isEnc, String f, String d, String b, String a, String c, String h, String addr) {
+            this.isEncrypted = isEnc;
+            this.fullName = f; this.dob = d; this.bloodType = b;
+            this.allergies = a; this.chronic = c; this.healthId = h;
+            this.address = addr;
+        }
+    }
+    
+    private void sendDataAPDU(CardChannel ch, int cla, int ins, int p1, int p2, byte[] data, String name) throws Exception {
+        if (data == null) data = new byte[0];
+        if (data.length > 255) throw new Exception("Payload quá lớn: " + data.length);
+        CommandAPDU capdu = new CommandAPDU(cla, ins, p1, p2, data);
+        ResponseAPDU r = ch.transmit(capdu);
+        txtInfoPreview.append(" -> " + name + ": " + formatSW(r.getSW()) + "\n");
+        if (r.getSW() != 0x9000) throw new Exception("Lỗi gửi " + name);
+    }
+    private String formatSW(int sw) { return String.format("0x%04X", sw & 0xFFFF); }
+    private void zeroByteArray(byte[] b) { if (b != null) Arrays.fill(b, (byte)0); }
+    private void zeroCharArray(char[] c) { if (c != null) Arrays.fill(c, '\0'); }
+    private boolean updatePublicKeyToDb(String pid, RSAPublicKey pubKey) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pst = conn.prepareStatement("UPDATE smartcards SET card_public_key = ? WHERE patient_id = ?")) {
+            pst.setString(1, Base64.getEncoder().encodeToString(pubKey.getEncoded()));
+            pst.setString(2, pid);
+            return pst.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
+    }
+    private void updateCardStatusActive(String pid) {
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pst = conn.prepareStatement("UPDATE smartcards SET card_status = 'ACTIVE' WHERE patient_id = ?")) {
+            pst.setString(1, pid); pst.executeUpdate();
+        } catch (Exception e) {}
     }
 }

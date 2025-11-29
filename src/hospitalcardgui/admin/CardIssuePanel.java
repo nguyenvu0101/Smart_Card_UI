@@ -70,46 +70,57 @@ public class CardIssuePanel extends JPanel {
         return c;
     }
 
-      private void onSave() {
+       private void onSave() {
         String patientId = txtPatientId.getText().trim();
         String cardId = txtCardId.getText().trim();
+        String dobStr = txtDob.getText().trim();
 
         if (patientId.isEmpty() || cardId.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Bắt buộc nhập mã bệnh nhân và mã thẻ.");
+            JOptionPane.showMessageDialog(this, "Bắt buộc nhập Mã BN và Mã Thẻ.");
+            return;
+        }
+        
+        // Kiểm tra Admin Key
+        if (!hospitalcardgui.admin.AdminKeyManager.isKeyReady()) {
+            JOptionPane.showMessageDialog(this, "Lỗi bảo mật: Chưa có Admin Key. Vui lòng đăng nhập lại.");
             return;
         }
 
-        Connection conn = null; // 1. Khai báo ở đây
+        Connection conn = null;
         try {
-            conn = DatabaseConnection.getConnection(); // 2. Lấy connection
+            conn = DatabaseConnection.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Insert vào bảng patients
-            String sqlPatient = "INSERT INTO patients (patient_id, full_name, date_of_birth, home_address, " +
-                    "blood_type, allergies, chronic_illness, health_insurance_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            // 1. GOM DỮ LIỆU THÀNH CHUỖI ĐỂ MÃ HÓA
+            // Format: FullName|Dob|Address|Blood|Allergies|Chronic|Insurance
+            String rawData = txtFullName.getText().trim() + "|" +       // 0
+                             txtDob.getText().trim() + "|" +            // 1
+                             txtBloodType.getText().trim() + "|" +      // 2
+                             txtAllergies.getText().trim() + "|" +      // 3
+                             txtChronicIllness.getText().trim() + "|" + // 4
+                             txtInsuranceId.getText().trim() + "|" +    // 5
+                             txtAddress.getText().trim();               // 6 
+
+            // 2. MÃ HÓA BẰNG ADMIN MASTER KEY
+            byte[] encryptedBytes = hospitalcardgui.CryptoUtils.aesEncrypt(
+                rawData.getBytes(java.nio.charset.StandardCharsets.UTF_8), 
+                hospitalcardgui.admin.AdminKeyManager.getKey()
+            );
+            String encryptedBase64 = java.util.Base64.getEncoder().encodeToString(encryptedBytes);
+
+            // 3. LƯU VÀO DB (Các cột thông tin thật để 'ENC', chỉ lưu cột encrypted_data)
+            // Giả sử bạn đã thêm cột 'encrypted_data' vào bảng patients
+            String sqlPatient = "INSERT INTO patients (patient_id, encrypted_data, full_name, date_of_birth, home_address, blood_type, allergies, chronic_illness, health_insurance_id) " +
+                                "VALUES (?, ?, 'ENC', NULL, 'ENC', 'ENC', 'ENC', 'ENC', 'ENC')";
 
             try (PreparedStatement pst = conn.prepareStatement(sqlPatient)) {
                 pst.setString(1, patientId);
-                pst.setString(2, txtFullName.getText().trim());
-                
-                String dobStr = txtDob.getText().trim();
-                if (dobStr.isEmpty()) {
-                    pst.setNull(3, java.sql.Types.DATE);
-                } else {
-                    pst.setDate(3, java.sql.Date.valueOf(dobStr));
-                }
-
-                pst.setString(4, txtAddress.getText().trim());
-                pst.setString(5, txtBloodType.getText().trim());
-                pst.setString(6, txtAllergies.getText().trim());
-                pst.setString(7, txtChronicIllness.getText().trim());
-                pst.setString(8, txtInsuranceId.getText().trim());
+                pst.setString(2, encryptedBase64); // Lưu chuỗi mã hóa
                 pst.executeUpdate();
             }
 
-            // 2. Insert vào bảng smartcards
-            String sqlCard = "INSERT INTO smartcards (card_id, patient_id, card_status, card_public_key) VALUES (?, ?, 'PENDING', NULL)";
-
+            // 4. INSERT SMARTCARDS (Giữ nguyên)
+            String sqlCard = "INSERT INTO smartcards (card_id, patient_id, card_status) VALUES (?, ?, 'PENDING')";
             try (PreparedStatement pst2 = conn.prepareStatement(sqlCard)) {
                 pst2.setString(1, cardId);
                 pst2.setString(2, patientId);
@@ -117,27 +128,18 @@ public class CardIssuePanel extends JPanel {
             }
 
             conn.commit();
-            JOptionPane.showMessageDialog(this, 
-                    "Đã lưu thông tin bệnh nhân vào CSDL thành công!\n" +
-                    "Vui lòng chuyển sang tab 'Ghi thẻ' để thực hiện phát hành thẻ vật lý.",
-                    "Thành công", JOptionPane.INFORMATION_MESSAGE);
-            
+            JOptionPane.showMessageDialog(this, "Lưu thành công (Đã mã hóa DB)!");
             clearForm();
 
         } catch (Exception ex) {
-            // 3. Giờ gọi rollback được vì conn khai báo bên ngoài
-            if (conn != null) {
-                try { conn.rollback(); } catch (Exception ignored) {}
-            }
+            if (conn != null) try { conn.rollback(); } catch (Exception ignored) {}
             ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Lỗi khi lưu vào CSDL: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage());
         } finally {
-            // 4. Đóng connection thủ công
-            if (conn != null) {
-                try { conn.close(); } catch (Exception ignored) {}
-            }
+            if (conn != null) try { conn.close(); } catch (Exception ignored) {}
         }
     }
+
 
     private void clearForm() {
         txtPatientId.setText("");
