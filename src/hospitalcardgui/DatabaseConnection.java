@@ -10,13 +10,17 @@ import java.util.Base64;
 
 public class DatabaseConnection {
 
-    private static final String URL = "jdbc:postgresql://db.hfjwsrzusreadekfxpoh.supabase.co:5432/postgres?sslmode=require";
-    private static final String USER = "postgres";
-    private static final String PASSWORD = "1234567"; 
+    // Connection Pooler - Transaction Mode
+    // Sử dụng pooler thay vì direct connection để tránh lỗi UnknownHostException
+    // Host: aws-1-ap-southeast-1.pooler.supabase.com
+    // Port: 6543 (Pooler port)
+    // User: postgres.hfjwsrzusreadekfxpoh (có project ID)
+    private static final String URL = "jdbc:postgresql://aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?user=postgres.hfjwsrzusreadekfxpoh&password=1234567&sslmode=require";
 
     public static Connection getConnection() throws SQLException, ClassNotFoundException {
         Class.forName("org.postgresql.Driver");
-        return DriverManager.getConnection(URL, USER, PASSWORD);
+        // User và password đã được đưa vào URL, không cần truyền riêng
+        return DriverManager.getConnection(URL);
     }
 
     // --- 1. HÀM LOGIN ADMIN (Giữ nguyên) ---
