@@ -108,6 +108,16 @@ public class APDUCommands {
         return null;
     }
 
+    public byte[] getWrappedKeyAdmin() {
+        try {
+            System.out.println("[APDU] === GET_WRAPPED_KEY_ADMIN (INS=0x27 P1=0x03) ===");
+            // Không cần login vì Admin đã verify password
+            ResponseAPDU resp = send(INS_GET_DATA_ENC, (byte)0x03, (byte)0, null, 32);
+            if (resp.getSW() == 0x9000) return resp.getData();
+        } catch (Exception e) { e.printStackTrace(); }
+        return null;
+    }
+
     // ================== QUẢN LÝ TRẠNG THÁI (LOGIN LẦN ĐẦU) ==================
 
     public int getCardStatus() {

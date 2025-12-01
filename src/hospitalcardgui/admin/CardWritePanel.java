@@ -192,6 +192,9 @@ public class CardWritePanel extends JPanel {
                 updatePublicKeyToDb(pid, pubKey);
             }
 
+            // Lưu Salt vào database để dùng cho reset PIN sau này
+            saveSaltToDb(pid, salt);
+            
             updateCardStatusActive(pid);
             lblStatus.setText("Hoàn tất!");
             lblStatus.setForeground(Color.GREEN);
@@ -291,5 +294,29 @@ public class CardWritePanel extends JPanel {
              PreparedStatement pst = conn.prepareStatement("UPDATE smartcards SET card_status = 'ACTIVE' WHERE patient_id = ?")) {
             pst.setString(1, pid); pst.executeUpdate();
         } catch (Exception e) {}
+    }
+    
+    private void saveSaltToDb(String pid, byte[] salt) {
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            // Tạo cột card_salt nếu chưa có
+            try {
+                conn.createStatement().executeUpdate(
+                    "ALTER TABLE smartcards ADD COLUMN IF NOT EXISTS card_salt TEXT"
+                );
+            } catch (Exception e) {
+                // Cột đã tồn tại, bỏ qua
+            }
+            
+            // Lưu Salt vào DB
+            String saltB64 = Base64.getEncoder().encodeToString(salt);
+            try (PreparedStatement pst = conn.prepareStatement(
+                "UPDATE smartcards SET card_salt = ? WHERE patient_id = ?")) {
+                pst.setString(1, saltB64);
+                pst.setString(2, pid);
+                pst.executeUpdate();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
