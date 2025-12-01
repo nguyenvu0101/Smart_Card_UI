@@ -3,6 +3,7 @@ package hospitalcardgui.admin;
 import hospitalcardgui.DatabaseConnection;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -17,46 +18,52 @@ public class CardIssuePanel extends JPanel {
     }
 
     private void initUI() {
-        setBorder(BorderFactory.createTitledBorder("Thông Tin Bệnh Nhân & Cấp Mã Thẻ"));
+        TitledBorder border = BorderFactory.createTitledBorder("Thông Tin Bệnh Nhân & Cấp Mã Thẻ");
+        border.setTitleFont(AdminTheme.FONT_BUTTON);
+        setBorder(border);
+        AdminTheme.applyMainBackground(this);
         setLayout(new BorderLayout(10, 10));
 
         JPanel form = new JPanel(new GridBagLayout());
+        AdminTheme.applyCardStyle(form);
         GridBagConstraints base = new GridBagConstraints();
         base.insets = new Insets(4, 4, 4, 4);
         base.fill = GridBagConstraints.HORIZONTAL;
 
         int row = 0;
-        form.add(new JLabel("Mã Bệnh Nhân:"), at(base, 0, row));
+        form.add(AdminTheme.label("Mã Bệnh Nhân:"), at(base, 0, row));
         form.add(txtPatientId = new JTextField(20), at(base, 1, row++));
 
-        form.add(new JLabel("Họ tên:"), at(base, 0, row));
+        form.add(AdminTheme.label("Họ tên:"), at(base, 0, row));
         form.add(txtFullName = new JTextField(20), at(base, 1, row++));
 
-        form.add(new JLabel("Ngày sinh (YYYY-MM-DD):"), at(base, 0, row));
+        form.add(AdminTheme.label("Ngày sinh (YYYY-MM-DD):"), at(base, 0, row));
         form.add(txtDob = new JTextField(20), at(base, 1, row++));
 
-        form.add(new JLabel("Địa chỉ:"), at(base, 0, row));
+        form.add(AdminTheme.label("Địa chỉ:"), at(base, 0, row));
         form.add(txtAddress = new JTextField(20), at(base, 1, row++));
 
-        form.add(new JLabel("Nhóm máu:"), at(base, 0, row));
+        form.add(AdminTheme.label("Nhóm máu:"), at(base, 0, row));
         form.add(txtBloodType = new JTextField(5), at(base, 1, row++));
 
-        form.add(new JLabel("Dị ứng:"), at(base, 0, row));
+        form.add(AdminTheme.label("Dị ứng:"), at(base, 0, row));
         form.add(txtAllergies = new JTextField(20), at(base, 1, row++));
 
-        form.add(new JLabel("Bệnh mãn tính:"), at(base, 0, row));
+        form.add(AdminTheme.label("Bệnh mãn tính:"), at(base, 0, row));
         form.add(txtChronicIllness = new JTextField(20), at(base, 1, row++));
 
-        form.add(new JLabel("Mã bảo hiểm:"), at(base, 0, row));
+        form.add(AdminTheme.label("Mã bảo hiểm:"), at(base, 0, row));
         form.add(txtInsuranceId = new JTextField(20), at(base, 1, row++));
 
-        form.add(new JLabel("Mã thẻ (Card ID):"), at(base, 0, row));
+        form.add(AdminTheme.label("Mã thẻ (Card ID):"), at(base, 0, row));
         form.add(txtCardId = new JTextField(20), at(base, 1, row++));
 
         add(form, BorderLayout.CENTER);
 
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        bottom.setOpaque(false);
         JButton btnSave = new JButton("Lưu Thông Tin (DB Only)");
+        AdminTheme.stylePrimaryButton(btnSave);
         btnSave.addActionListener(e -> onSave());
         bottom.add(btnSave);
 

@@ -9,6 +9,7 @@ import javax.smartcardio.CardChannel;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -36,33 +37,37 @@ public class CardWritePanel extends JPanel {
     public CardWritePanel() { initUI(); }
 
     private void initUI() {
-        setBorder(BorderFactory.createTitledBorder("Phát hành thẻ (Chuẩn hóa dữ liệu)"));
+        TitledBorder border = BorderFactory.createTitledBorder("Phát hành thẻ (Chuẩn hóa dữ liệu)");
+        border.setTitleFont(AdminTheme.FONT_BUTTON);
+        setBorder(border);
+        AdminTheme.applyMainBackground(this);
         setLayout(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(5,5,5,5);
         c.fill = GridBagConstraints.HORIZONTAL;
 
         int row = 0;
-        c.gridx = 0; c.gridy = row; add(new JLabel("Mã bệnh nhân:"), c);
+        c.gridx = 0; c.gridy = row; add(AdminTheme.label("Mã bệnh nhân:"), c);
         c.gridx = 1; txtPatientId = new JTextField(15); add(txtPatientId, c);
         row++;
 
-        c.gridx = 0; c.gridy = row; add(new JLabel("PIN User (6 số):"), c);
+        c.gridx = 0; c.gridy = row; add(AdminTheme.label("PIN User (6 số):"), c);
         c.gridx = 1; txtPin = new JPasswordField(15); add(txtPin, c);
         row++;
 
-        c.gridx = 0; c.gridy = row; add(new JLabel("Admin Password:"), c);
+        c.gridx = 0; c.gridy = row; add(AdminTheme.label("Admin Password:"), c);
         c.gridx = 1; txtAdminPass = new JPasswordField(15); add(txtAdminPass, c);
         row++;
 
         c.gridx = 0; c.gridy = row; c.gridwidth = 2;
         btnWrite = new JButton("Ghi Thẻ & Mã Hóa DB");
+        AdminTheme.stylePrimaryButton(btnWrite);
         btnWrite.addActionListener(e -> onWrite());
         add(btnWrite, c);
         row++;
 
         c.gridx = 0; c.gridy = row; c.gridwidth = 2;
-        lblStatus = new JLabel("Chưa kết nối");
+        lblStatus = AdminTheme.label("Chưa kết nối");
         lblStatus.setForeground(Color.RED);
         add(lblStatus, c);
         row++;

@@ -5,6 +5,7 @@ import hospitalcardgui.CryptoUtils;
 import hospitalcardgui.DatabaseConnection;
 
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.nio.charset.StandardCharsets;
@@ -45,16 +46,21 @@ public class CardManagePanel extends JPanel {
     }
 
     private void initUI() {
-        setBorder(BorderFactory.createTitledBorder("Quản Lý & Tra Cứu"));
+        TitledBorder border = BorderFactory.createTitledBorder("Quản Lý & Tra Cứu");
+        border.setTitleFont(AdminTheme.FONT_BUTTON);
+        setBorder(border);
+        AdminTheme.applyMainBackground(this);
         setLayout(new BorderLayout(10, 10));
 
         // 1. TOP
         JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.setOpaque(false);
         cbField = new JComboBox<>(new String[]{"Mã bệnh nhân", "Mã thẻ"});
         txtKeyword = new JTextField(20);
         JButton btnSearch = new JButton("Tìm");
+        AdminTheme.stylePrimaryButton(btnSearch);
         btnSearch.addActionListener(e -> search());
-        top.add(new JLabel("Tìm theo:")); top.add(cbField); top.add(txtKeyword); top.add(btnSearch);
+        top.add(AdminTheme.label("Tìm theo:")); top.add(cbField); top.add(txtKeyword); top.add(btnSearch);
         add(top, BorderLayout.NORTH);
 
         // 2. CENTER
@@ -62,61 +68,71 @@ public class CardManagePanel extends JPanel {
             @Override public boolean isCellEditable(int row, int column) { return false; }
         };
         table = new JTable(model);
+        table.setFillsViewportHeight(true);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> onRowSelected());
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.getViewport().setBackground(AdminTheme.BG_CARD);
+        scroll.setBorder(BorderFactory.createLineBorder(AdminTheme.BORDER_SOFT));
+        add(scroll, BorderLayout.CENTER);
 
         // 3. BOTTOM
         JPanel bottom = new JPanel(new GridBagLayout());
-        bottom.setBorder(BorderFactory.createTitledBorder("Chi tiết hồ sơ"));
+        TitledBorder detailBorder = BorderFactory.createTitledBorder("Chi tiết hồ sơ");
+        detailBorder.setTitleFont(AdminTheme.FONT_BUTTON);
+        bottom.setBorder(detailBorder);
+        AdminTheme.applyCardStyle(bottom);
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(4, 4, 4, 4); c.fill = GridBagConstraints.HORIZONTAL;
 
         int row = 0;
-        c.gridx = 0; c.gridy = row; bottom.add(new JLabel("Mã thẻ:"), c);
+        c.gridx = 0; c.gridy = row; bottom.add(AdminTheme.label("Mã thẻ:"), c);
         txtEditCardId = new JTextField(15); txtEditCardId.setEditable(false);
         c.gridx = 1; bottom.add(txtEditCardId, c); row++;
 
-        c.gridx = 0; c.gridy = row; bottom.add(new JLabel("Trạng thái:"), c);
+        c.gridx = 0; c.gridy = row; bottom.add(AdminTheme.label("Trạng thái:"), c);
         txtEditStatus = new JTextField(15); txtEditStatus.setEditable(false);
         c.gridx = 1; bottom.add(txtEditStatus, c); row++;
 
-        c.gridx = 0; c.gridy = row; bottom.add(new JLabel("Mã BN:"), c);
+        c.gridx = 0; c.gridy = row; bottom.add(AdminTheme.label("Mã BN:"), c);
         txtEditPatientId = new JTextField(15); txtEditPatientId.setEditable(false);
         c.gridx = 1; bottom.add(txtEditPatientId, c);
 
         // Cột 2
         row = 0;
-        c.gridx = 2; c.gridy = row; bottom.add(new JLabel("Họ tên:"), c);
+        c.gridx = 2; c.gridy = row; bottom.add(AdminTheme.label("Họ tên:"), c);
         txtEditFullName = new JTextField(15); c.gridx = 3; bottom.add(txtEditFullName, c); row++;
 
-        c.gridx = 2; c.gridy = row; bottom.add(new JLabel("Ngày sinh:"), c);
+        c.gridx = 2; c.gridy = row; bottom.add(AdminTheme.label("Ngày sinh:"), c);
         txtEditDob = new JTextField(15); c.gridx = 3; bottom.add(txtEditDob, c); row++;
 
-        c.gridx = 2; c.gridy = row; bottom.add(new JLabel("BHYT:"), c);
+        c.gridx = 2; c.gridy = row; bottom.add(AdminTheme.label("BHYT:"), c);
         txtEditHealthId = new JTextField(15); c.gridx = 3; bottom.add(txtEditHealthId, c); row++;
 
-        c.gridx = 2; c.gridy = row; bottom.add(new JLabel("Địa chỉ:"), c);
+        c.gridx = 2; c.gridy = row; bottom.add(AdminTheme.label("Địa chỉ:"), c);
         txtEditAddress = new JTextField(15); c.gridx = 3; bottom.add(txtEditAddress, c);
 
         // Cột 3
         row = 0;
-        c.gridx = 4; c.gridy = row; bottom.add(new JLabel("Nhóm máu:"), c);
+        c.gridx = 4; c.gridy = row; bottom.add(AdminTheme.label("Nhóm máu:"), c);
         txtEditBloodType = new JTextField(10); c.gridx = 5; bottom.add(txtEditBloodType, c); row++;
 
-        c.gridx = 4; c.gridy = row; bottom.add(new JLabel("Dị ứng:"), c);
+        c.gridx = 4; c.gridy = row; bottom.add(AdminTheme.label("Dị ứng:"), c);
         txtEditAllergies = new JTextField(10); c.gridx = 5; bottom.add(txtEditAllergies, c); row++;
 
-        c.gridx = 4; c.gridy = row; bottom.add(new JLabel("Bệnh nền:"), c);
+        c.gridx = 4; c.gridy = row; bottom.add(AdminTheme.label("Bệnh nền:"), c);
         txtEditChronic = new JTextField(10); c.gridx = 5; bottom.add(txtEditChronic, c);
 
         // BUTTONS
         JPanel pnlBtns = new JPanel();
+        pnlBtns.setOpaque(false);
         JButton btnEdit = new JButton("Sửa Thông Tin");
         JButton btnSave = new JButton("Lưu Cập Nhật");
         btnSave.setEnabled(false);
         JButton btnDelete = new JButton("Xóa Hồ Sơ");
-        btnDelete.setForeground(Color.RED);
+        AdminTheme.styleSecondaryButton(btnEdit);
+        AdminTheme.stylePrimaryButton(btnSave);
+        AdminTheme.styleDangerButton(btnDelete);
 
         btnEdit.addActionListener(e -> {
             if (selectedPatientId == null) {

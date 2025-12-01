@@ -9,6 +9,7 @@ import javax.smartcardio.CardChannel;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import javax.swing.*;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -37,53 +38,68 @@ public class ResetPinPanel extends JPanel {
     }
 
     private void initUI() {
-        setBorder(BorderFactory.createTitledBorder("Reset PIN User"));
+        TitledBorder border = BorderFactory.createTitledBorder("Reset PIN User");
+        border.setTitleFont(AdminTheme.FONT_BUTTON);
+        setBorder(border);
+        AdminTheme.applyMainBackground(this);
         setLayout(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(5, 5, 5, 5);
 
         // Tạo panel form chứa các input field
         JPanel formPanel = new JPanel(new GridBagLayout());
+        AdminTheme.applyCardStyle(formPanel);
         GridBagConstraints fc = new GridBagConstraints();
         fc.insets = new Insets(5, 5, 5, 5);
-        fc.fill = GridBagConstraints.NONE;
-        fc.anchor = GridBagConstraints.CENTER;
+        fc.fill = GridBagConstraints.HORIZONTAL;
+        fc.anchor = GridBagConstraints.WEST;
+        fc.weightx = 1.0;
 
         int row = 0;
         fc.gridx = 0; fc.gridy = row;
-        fc.anchor = GridBagConstraints.CENTER;
-        formPanel.add(new JLabel("Mã bệnh nhân:"), fc);
+        fc.anchor = GridBagConstraints.EAST;
+        formPanel.add(AdminTheme.label("Mã bệnh nhân:"), fc);
         fc.gridx = 1;
-        txtPatientId = new JTextField(20);
+        txtPatientId = new JTextField(25);
+        txtPatientId.setFont(AdminTheme.FONT_INPUT);
+        txtPatientId.setPreferredSize(new Dimension(280, 32));
+        txtPatientId.setMinimumSize(new Dimension(280, 32));
         formPanel.add(txtPatientId, fc);
         row++;
 
         fc.gridx = 0; fc.gridy = row;
-        fc.anchor = GridBagConstraints.CENTER;
-        formPanel.add(new JLabel("Admin Password:"), fc);
+        fc.anchor = GridBagConstraints.EAST;
+        formPanel.add(AdminTheme.label("Admin Password:"), fc);
         fc.gridx = 1;
-        txtAdminPass = new JPasswordField(20);
+        txtAdminPass = new JPasswordField(25);
+        txtAdminPass.setFont(AdminTheme.FONT_INPUT);
+        txtAdminPass.setPreferredSize(new Dimension(280, 32));
+        txtAdminPass.setMinimumSize(new Dimension(280, 32));
         formPanel.add(txtAdminPass, fc);
         row++;
 
         fc.gridx = 0; fc.gridy = row;
-        fc.anchor = GridBagConstraints.CENTER;
-        formPanel.add(new JLabel("PIN mới (6 số):"), fc);
+        fc.anchor = GridBagConstraints.EAST;
+        formPanel.add(AdminTheme.label("PIN mới (6 số):"), fc);
         fc.gridx = 1;
-        txtNewPin = new JPasswordField(20);
+        txtNewPin = new JPasswordField(25);
+        txtNewPin.setFont(AdminTheme.FONT_INPUT);
+        txtNewPin.setPreferredSize(new Dimension(280, 32));
+        txtNewPin.setMinimumSize(new Dimension(280, 32));
         formPanel.add(txtNewPin, fc);
         row++;
 
         fc.gridx = 0; fc.gridy = row; fc.gridwidth = 2;
         fc.anchor = GridBagConstraints.CENTER;
         btnReset = new JButton("Reset PIN");
+        AdminTheme.stylePrimaryButton(btnReset);
         btnReset.addActionListener(e -> onResetPin());
         formPanel.add(btnReset, fc);
         row++;
 
         fc.gridx = 0; fc.gridy = row; fc.gridwidth = 2;
         fc.anchor = GridBagConstraints.CENTER;
-        lblStatus = new JLabel("Chưa kết nối");
+        lblStatus = AdminTheme.label("Chưa kết nối");
         lblStatus.setForeground(Color.RED);
         formPanel.add(lblStatus, fc);
 

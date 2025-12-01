@@ -4,6 +4,7 @@ import hospitalcardgui.admin.AdminKeyManager;
 import hospitalcardgui.DatabaseConnection;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 
@@ -21,29 +22,36 @@ public class LoginFrame extends JFrame {
     private void initUI() {
         setTitle("Đăng nhập Hệ thống Quản trị");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(400, 250);
+        setSize(430, 260);
         setLocationRelativeTo(null); // Căn giữa màn hình
         setResizable(false);
 
-        // Layout chính
+        // Nền sáng theo AdminTheme
+        getContentPane().setBackground(AdminTheme.BG_MAIN);
+
+        // Card login ở giữa
         JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        add(panel);
+        AdminTheme.applyCardStyle(panel);
+        panel.setBorder(new EmptyBorder(20, 24, 20, 24));
+
+        JPanel root = new JPanel(new GridBagLayout());
+        root.setBackground(AdminTheme.BG_MAIN);
+        root.add(panel, new GridBagConstraints());
+        add(root);
 
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(10, 10, 10, 10);
         c.fill = GridBagConstraints.HORIZONTAL;
 
         // Tiêu đề
-        JLabel lblTitle = new JLabel("ADMIN LOGIN");
-        lblTitle.setFont(new Font("Arial", Font.BOLD, 20));
+        JLabel lblTitle = AdminTheme.headingLabel("ADMIN LOGIN");
         lblTitle.setHorizontalAlignment(SwingConstants.CENTER);
         c.gridx = 0; c.gridy = 0; c.gridwidth = 2;
         panel.add(lblTitle, c);
 
         // Username
         c.gridwidth = 1; c.gridy = 1;
-        panel.add(new JLabel("Tài khoản:"), c);
+        panel.add(AdminTheme.label("Tài khoản:"), c);
         
         c.gridx = 1;
         txtUsername = new JTextField("admin", 15); // Mặc định điền sẵn admin
@@ -51,7 +59,7 @@ public class LoginFrame extends JFrame {
 
         // Password
         c.gridx = 0; c.gridy = 2;
-        panel.add(new JLabel("Mật khẩu:"), c);
+        panel.add(AdminTheme.label("Mật khẩu:"), c);
         
         c.gridx = 1;
         txtPassword = new JPasswordField(15);
@@ -61,6 +69,17 @@ public class LoginFrame extends JFrame {
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         btnLogin = new JButton("Đăng nhập");
         btnExit = new JButton("Thoát");
+
+        // Nút đăng nhập: nền sáng, chữ tối giống style cũ hơn
+        btnLogin.setFont(AdminTheme.FONT_BUTTON);
+        btnLogin.setBackground(AdminTheme.BG_ACCENT_SOFT);
+        btnLogin.setForeground(AdminTheme.TEXT_PRIMARY);
+        btnLogin.setFocusPainted(false);
+        btnLogin.setBorder(new EmptyBorder(8, 16, 8, 16));
+        btnLogin.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        // Nút thoát vẫn dùng style phụ hiện đại
+        AdminTheme.styleSecondaryButton(btnExit);
 
         btnPanel.add(btnLogin);
         btnPanel.add(btnExit);
