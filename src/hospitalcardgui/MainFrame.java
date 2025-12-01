@@ -1,9 +1,12 @@
 package hospitalcardgui;
 
+import hospitalcardgui.admin.AdminTheme;
+
 import javax.smartcardio.CardChannel;
 import javax.smartcardio.CommandAPDU;
 import javax. smartcardio.ResponseAPDU;
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -71,27 +74,56 @@ public class MainFrame extends JFrame {
     private void initUI() {
         setTitle("Hệ thống thẻ bệnh nhân (Kiosk)");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(900, 650);
+        setSize(950, 680);
         setLocationRelativeTo(null);
 
+        getContentPane().setBackground(AdminTheme.BG_MAIN);
+
         JPanel root = new JPanel(new BorderLayout(10,10));
-        root.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+        root.setBorder(new EmptyBorder(16,16,16,16));
+        root.setBackground(AdminTheme.BG_MAIN);
         add(root);
+
+        // Header giống AdminFrame nhưng dành cho kiosk
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(AdminTheme.BG_ACCENT);
+        header.setBorder(new EmptyBorder(10, 16, 10, 16));
+
+        JLabel title = new JLabel("KIOSK THẺ BỆNH NHÂN TỰ PHỤC VỤ");
+        title.setFont(AdminTheme.FONT_TITLE);
+        title.setForeground(Color.WHITE);
+
+        JLabel subtitle = new JLabel("Đăng nhập bằng thẻ thông minh • Xem thông tin • Nạp & thanh toán");
+        subtitle.setFont(AdminTheme.FONT_LABEL);
+        subtitle.setForeground(new Color(224, 247, 250));
+
+        JPanel textWrap = new JPanel(new BorderLayout(0, 2));
+        textWrap.setOpaque(false);
+        textWrap.add(title, BorderLayout.NORTH);
+        textWrap.add(subtitle, BorderLayout.SOUTH);
+
+        header.add(textWrap, BorderLayout.WEST);
+        root.add(header, BorderLayout.NORTH);
 
         // ===== KẾT NỐI THẺ =====
         JPanel top = new JPanel(new GridBagLayout());
-        top.setBorder(BorderFactory.createTitledBorder("Kết nối thẻ"));
+        top.setOpaque(false);
+        top.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createTitledBorder("Kết nối thẻ"),
+                new EmptyBorder(8, 12, 12, 12)
+        ));
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(5,5,5,5);
         c.fill = GridBagConstraints. HORIZONTAL;
 
         c.gridx = 0; c.gridy = 0;
         btnConnect = new JButton("Kết nối thẻ");
+        AdminTheme.stylePrimaryButton(btnConnect);
         btnConnect.addActionListener(e -> onConnect());
         top.add(btnConnect, c);
 
         c.gridx = 0; c.gridy = 1; c.gridwidth = 2;
-        lblStatus = new JLabel("Trạng thái: chưa kết nối");
+        lblStatus = AdminTheme.label("Trạng thái: chưa kết nối");
         lblStatus.setForeground(Color.RED);
         top.add(lblStatus, c);
 
@@ -100,6 +132,8 @@ public class MainFrame extends JFrame {
         // ===== CardLayout =====
         cardLayout = new CardLayout();
         cardPanel = new JPanel(cardLayout);
+        cardPanel.setBorder(new EmptyBorder(10,0,0,0));
+        cardPanel.setBackground(AdminTheme.BG_MAIN);
 
         pinPanel = new PinPanel(this);
         transactionPanel = new TransactionPanel(this);

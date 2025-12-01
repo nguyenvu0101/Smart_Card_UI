@@ -1,5 +1,7 @@
 package hospitalcardgui;
 
+import hospitalcardgui.admin.AdminTheme;
+
 import javax. swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -33,15 +35,18 @@ public class TransactionPanel extends JPanel {
 
 private void initUI() {
         setLayout(new BorderLayout(10, 10));
+        setBackground(AdminTheme.BG_MAIN);
 
         // =================================================================
         // 1. CONTAINER TRÊN CÙNG (Gồm Avatar bên trái + Info bên phải)
         // =================================================================
         JPanel topContainer = new JPanel(new BorderLayout(10, 0));
+        topContainer.setOpaque(false);
         topContainer.setBorder(BorderFactory.createTitledBorder("Thông tin bệnh nhân"));
 
         // --- A. PANEL ẢNH (BÊN TRÁI) ---
         JPanel avatarPanel = new JPanel(new BorderLayout(5, 5));
+        avatarPanel.setOpaque(false);
         
         // Label hiển thị ảnh
         lblAvatar = new JLabel("No Image", SwingConstants.CENTER);
@@ -50,7 +55,8 @@ private void initUI() {
         
         // Nút chọn ảnh
         btnUploadImg = new JButton("Chọn & Lưu Ảnh");
-        btnUploadImg.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        btnUploadImg.setFont(AdminTheme.FONT_BUTTON.deriveFont(11f));
+        AdminTheme.styleSecondaryButton(btnUploadImg);
         btnUploadImg.addActionListener(e -> onUploadImage());
 
         avatarPanel.add(lblAvatar, BorderLayout.CENTER);
@@ -62,6 +68,7 @@ private void initUI() {
 
         // --- B. PANEL THÔNG TIN CHỮ (BÊN PHẢI - Code cũ của bạn) ---
         JPanel infoPanel = new JPanel(new GridBagLayout());
+        infoPanel.setOpaque(false);
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(3, 3, 3, 3);
         c.anchor = GridBagConstraints.WEST;
@@ -86,6 +93,7 @@ private void initUI() {
         // 2. GIAO DỊCH (GIỮ NGUYÊN CODE CŨ)
         // =================================================================
         JPanel mid = new JPanel(new GridBagLayout());
+        mid.setOpaque(false);
         mid.setBorder(BorderFactory.createTitledBorder("Ví y tế & giao dịch"));
         c = new GridBagConstraints();
         c.insets = new Insets(5, 5, 5, 5);
@@ -102,6 +110,7 @@ private void initUI() {
 
         c.gridx = 2;
         btnGetBalance = new JButton("Lấy số dư");
+        AdminTheme.styleSecondaryButton(btnGetBalance);
         btnGetBalance.addActionListener(e -> onGetBalance());
         mid.add(btnGetBalance, c);
 
@@ -110,15 +119,18 @@ private void initUI() {
 
         c.gridx = 1;
         txtAmount = new JTextField(10);
+        txtAmount.setFont(AdminTheme.FONT_INPUT);
         mid.add(txtAmount, c);
 
         c.gridx = 0; c.gridy = 2;
         btnCredit = new JButton("Nạp tiền");
+        AdminTheme.stylePrimaryButton(btnCredit);
         btnCredit.addActionListener(e -> onCredit());
         mid.add(btnCredit, c);
 
         c.gridx = 1;
         btnDebit = new JButton("Thanh toán");
+        AdminTheme.styleDangerButton(btnDebit);
         btnDebit.addActionListener(e -> onDebit());
         mid.add(btnDebit, c);
 
@@ -128,6 +140,7 @@ private void initUI() {
         // 3. LOG (GIỮ NGUYÊN CODE CŨ)
         // =================================================================
         JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setOpaque(false);
         bottom.setBorder(BorderFactory.createTitledBorder("Lịch sử thao tác (log)"));
         txtLog = new JTextArea(8, 40);
         txtLog.setEditable(false);
