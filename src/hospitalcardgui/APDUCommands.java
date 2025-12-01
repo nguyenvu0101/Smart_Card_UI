@@ -35,6 +35,9 @@ public class APDUCommands {
     public static final byte INS_SIGN_CHALLENGE   = (byte)0x51;
     public static final byte INS_GEN_RSA_KEYPAIR  = (byte)0x52; 
     public static final byte INS_SET_RSA_KEY      = (byte)0x50; // (Ít dùng)
+    
+    // Lệnh upload ảnh (MỚI THÊM)
+    public static final byte INS_UPLOAD_IMAGE   = 0x70;
 
     public APDUCommands(CardChannel channel) {
         this.channel = channel;
@@ -200,5 +203,47 @@ public class APDUCommands {
         StringBuilder sb = new StringBuilder();
         for (byte b : bytes) sb.append(String.format("%02X", b));
         return sb.toString();
+    }
+    
+    public boolean uploadImageToCard(byte[] imageBytes) {
+        // 2. Cấu hình cắt gói tin (Chunking)
+        int chunkSize = 240; // Gửi tối đa 240 byte mỗi lần (an toàn cho APDU)
+        int offset = 0;
+        
+        try {
+            while (offset < imageBytes.length) {
+                // Tính độ dài gói tin hiện tại
+                int len = Math.min(chunkSize, imageBytes.length - offset);
+                
+                // Tạo mảng con (chunk)
+                byte[] chunk = new byte[len];
+                System.arraycopy(imageBytes, offset, chunk, 0, len);
+                
+                // 3. Tính P1, P2 để báo vị trí ghi (Offset) cho thẻ
+                // P1 là byte cao, P2 là byte thấp của offset
+                int p1 = (offset >> 8) & 0xFF;
+                int p2 = offset & 0xFF;
+                
+                // 4. Gửi lệnh xuống thẻ
+                // 'channel' là biến CardChannel bạn đã kết nối trước đó trong class này
+                CommandAPDU command = new CommandAPDU(CLA_APPLET, INS_UPLOAD_IMAGE, p1, p2, chunk);
+                ResponseAPDU response = channel.transmit(command);
+                
+                // Kiểm tra phản hồi (0x9000 là OK)
+                if (response.getSW() != 0x9000) {
+                    System.out.println("Lỗi upload tại offset " + offset + ": " + Integer.toHexString(response.getSW()));
+                    return false; // Dừng ngay nếu lỗi
+                }
+                
+                // Tăng offset để gửi gói tiếp theo
+                offset += len;
+            }
+            
+            return true; // Đã gửi hết thành công
+            
+        } catch (CardException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }
